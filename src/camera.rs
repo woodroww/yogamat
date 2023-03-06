@@ -57,17 +57,19 @@ fn pan_orbit_camera(
         }
     }
 
+    // mouse bindings for native build
     #[cfg(not(target_arch = "wasm32"))]
     let orbit_button = MouseButton::Middle;
     #[cfg(not(target_arch = "wasm32"))]
     let pan_button = MouseButton::Right;
 
+    // mouse bindings for wasm
     // change input mapping for orbit and panning here,
     // a right click is going to bring up browser right click menu
     #[cfg(target_arch = "wasm32")]
     let orbit_button = MouseButton::Left;
     #[cfg(target_arch = "wasm32")]
-    let pan_button = MouseButton::Middle;
+    let pan_button = MouseButton::Right;
 
     let mut pan = Vec2::ZERO;
     let mut rotation_move = Vec2::ZERO;

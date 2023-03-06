@@ -420,7 +420,7 @@ fn spawn_bone(
     bone_parent: Entity,
     transform: Transform,
 ) -> Entity {
-    let pickable = true;
+    let pickable = false;
     let new_bone = commands.entity(bone_parent).add_children(|parent| {
         if pickable {
             parent
@@ -482,8 +482,8 @@ fn spawn_skeleton(
             material: material_handle.clone(),
             ..default()
         })
-        .insert(PickableBundle::default())
-        .insert(bevy_transform_gizmo::GizmoTransformable)
+        //.insert(PickableBundle::default())
+        //.insert(bevy_transform_gizmo::GizmoTransformable)
         .insert(Name::from(name))
         .insert(Bone { id: bone_id })
         .id();
