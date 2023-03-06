@@ -113,7 +113,7 @@ fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     let height = 1400.0;
     #[cfg(target_arch = "wasm32")]
-    let width = 645.0;
+    let width = 1000.0;
     #[cfg(target_arch = "wasm32")]
     let height = 700.0;
 
