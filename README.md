@@ -13,17 +13,17 @@ cargo run --release
 ```bash
 rustup target add wasm32-unknown-unknown
 ```
-### build the wasm-release profile defined in the Cargo.toml
+### Build the wasm-release profile defined in the Cargo.toml.
 ```bash
 cargo build --profile wasm-release --target wasm32-unknown-unknown
 ```
-### use wasm-bindgen to build the webapp directory for serving on the web
+### Use wasm-bindgen to build the webapp directory for serving on the web.
 [wasm-bindgen](https://rustwasm.github.io/wasm-bindgen/)
-#### install
+#### Install
 ```bash
 cargo install -f wasm-bindgen-cli
 ```
-#### run
+#### Run
 ```bash
 wasm-bindgen --out-dir ./webapp/ --target web --no-typescript target/wasm32-unknown-unknown/wasm-release/yogamat.wasm
 ```
@@ -32,14 +32,15 @@ After running the above wasm-bindgen command:
 Either you have to disable the right click context menu in the browser to use the default key bindings or change the bindings in camera.rs.
 To disable right click this needs to be put in yogamat.js at the beginning of the init function.
 ```javascript
-async function init(input) {
+// async function init(input) {
     document.addEventListener("contextmenu", function (e){
         e.preventDefault();
     }, false);
     // ...
 ```
-### optionally run [wasm-opt](https://crates.io/crates/wasm-opt) to optimize the wasm file for size
+### Optionally run [wasm-opt](https://crates.io/crates/wasm-opt) to optimize the wasm file for size
 [wasm-opt](https://crates.io/crates/wasm-opt)
+
 Rust bindings for [Binaryen's c++ toolkit's](https://github.com/WebAssembly/binaryen) wasm-opt
 to optimize the wasm even further past any optimizations in Cargo.toml `[profile]`
 #### install
@@ -48,7 +49,7 @@ cargo install wasm-opt --locked
 ```
 #### run
 In the webapp dir:
-This takes my wasm size from 12M to 8.7M.
+(This takes my wasm size from 12M to 8.7M.)
 ```bash
 wasm-opt -Oz -o yogamat_bg.wasm yogamat_bg.wasm
 ```
