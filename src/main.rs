@@ -1,25 +1,21 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    fs::File,
-};
-
+use std::collections::{BTreeMap, HashMap};
 use bevy::{pbr::NotShadowCaster, prelude::*, render::camera::Viewport};
+use bevy::window::{WindowResolution, PrimaryWindow};
 use bevy_inspector_egui::{
     bevy_egui::{egui, EguiPlugin},
-    quick::WorldInspectorPlugin,
+    // quick::WorldInspectorPlugin,
 };
-use bevy_egui::EguiContext;
-
+use bevy_egui::{EguiContexts, EguiContext};
 use bevy_mod_picking::*;
-use camera::{CameraPlugin, PanOrbitCamera};
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 #[cfg(not(target_arch = "wasm32"))]
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use skeleton::{make_bone_mesh, BoneCube, Joint, JointMatrix};
-use std::io::Write;
+// use std::io::Write;
 
-mod camera;
+use easy_cam::{CameraPlugin, PanOrbitCamera};
+
 mod skeleton;
 mod vector_ops;
 
@@ -120,22 +116,22 @@ fn main() {
     App::new()
         .insert_resource(ClearColor(Color::hex("292929").unwrap()))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
-            window: WindowDescriptor {
+            primary_window: Some(Window {
+                resolution: WindowResolution::new(width, height),
                 title: "YogaMat".to_string(),
-                width,
-                height,
-                position: WindowPosition::At(Vec2::new(0.0, 0.0)),
+                resizable: true,
+                position: WindowPosition::At(IVec2::new(0, 0)),
                 ..default()
-            },
+            }),
             ..default()
         }))
         //.add_plugin(WorldInspectorPlugin) // either EguiPlugin or WorldInspectorPlugin, not both
         .add_plugin(EguiPlugin) // either EguiPlugin or WorldInspectorPlugin, not both
         //.add_plugin(FilterQueryInspectorPlugin::<With<Bone>>::default())
-        .register_type::<PanOrbitCamera>() // bevy_inspector_egui for inspecting
+        //.register_type::<PanOrbitCamera>() // bevy_inspector_egui for inspecting
         .add_plugin(CameraPlugin)
         .add_plugins(DefaultPickingPlugins)
-        .add_plugin(bevy_transform_gizmo::TransformGizmoPlugin)
+        .add_plugin(bevy_transform_gizmo::TransformGizmoPlugin::new(Quat::default()))
         .add_startup_system(spawn_skeleton)
         .add_startup_system(spawn_camera)
         .add_startup_system(spawn_main_axis)
@@ -146,8 +142,8 @@ fn main() {
         .init_resource::<OccupiedScreenSpace>()
         .add_system(ui_example_system)
         .add_system(update_camera_transform_system)
-        .add_startup_system_to_stage(StartupStage::PreStartup, load_resources)
-        .add_startup_system_to_stage(StartupStage::PostStartup, initial_pose)
+        .add_startup_system(load_resources.in_base_set(StartupSet::PreStartup))
+        .add_startup_system(initial_pose.in_base_set(StartupSet::PostStartup))
         .run();
 }
 
@@ -163,15 +159,17 @@ struct OccupiedScreenSpace {
 struct OriginalCameraTransform(Transform);
 
 fn ui_example_system(
-    mut egui_context: ResMut<EguiContext>,
+    mut egui_contexts: Query<&mut EguiContext>,
     mut occupied_screen_space: ResMut<OccupiedScreenSpace>,
     mut yoga_assets: ResMut<YogaAssets>,
     bones: Query<(&mut Transform, &Bone)>,
     asana_text: Query<&mut Text, With<AsanaName>>,
 ) {
+
+    let egui_context: &mut EguiContext = &mut egui_contexts.single_mut();
     occupied_screen_space.left = egui::SidePanel::left("left_panel")
         .resizable(true)
-        .show(egui_context.ctx_mut(), |ui| {
+        .show(egui_context.get_mut(), |ui| {
             ui.vertical(|ui| {
                 if ui.checkbox(&mut yoga_assets.check_sanskrit, "Search in Sanskrit").clicked() {
                     yoga_assets.search();
@@ -206,10 +204,10 @@ fn ui_example_system(
 
 fn update_camera_transform_system(
     occupied_screen_space: Res<OccupiedScreenSpace>,
-    windows: Res<Windows>,
+    window: Query<&Window, With<PrimaryWindow>>,
     mut camera_query: Query<&mut Camera>,
 ) {
-    let window = windows.get_primary().unwrap();
+    let window = window.get_single().unwrap();
     let viewport_width = window.physical_width() - occupied_screen_space.left - occupied_screen_space.right;
     let viewport_height =  window.physical_height() - occupied_screen_space.top - occupied_screen_space.bottom;
     // I guess the gizmo adds a camera ???
@@ -404,9 +402,9 @@ fn spawn_mat(
             })
             .insert(Name::from(format!("my spot {}", light_number)))
             .id();
-        commands.entity(light).add_children(|parent| {
-            spawn_entity_axis(parent, &mut meshes, &mut materials, true);
-        });
+
+        //let axis = spawn_entity_axis(commands.entity(light), &mut meshes, &mut materials, Visibility::Visible);
+        //commands.entity(light).add_child(axis);
     }
 }
 
@@ -421,36 +419,34 @@ fn spawn_bone(
     transform: Transform,
 ) -> Entity {
     let pickable = false;
-    let new_bone = commands.entity(bone_parent).add_children(|parent| {
-        if pickable {
-            parent
-                .spawn(PbrBundle {
-                    mesh: meshes.add(make_bone_mesh(bone_cube)),
-                    material,
-                    transform,
-                    ..default()
-                })
-                .insert(PickableBundle::default())
-                .insert(bevy_transform_gizmo::GizmoTransformable)
-                .insert(Name::from(bone_cube.name.clone()))
-                .insert(Bone { id: bone_id })
-                .id()
-        } else {
-            parent
-                .spawn(PbrBundle {
-                    mesh: meshes.add(make_bone_mesh(bone_cube)),
-                    material,
-                    transform,
-                    ..default()
-                })
-                .insert(Name::from(bone_cube.name.clone()))
-                .insert(Bone { id: bone_id })
-                .id()
-        }
-    });
-    commands.entity(new_bone).add_children(|parent| {
-        spawn_entity_axis(parent, &mut meshes, &mut materials, false);
-    });
+
+    let new_bone = if pickable {
+        commands 
+            .spawn(PbrBundle {
+                mesh: meshes.add(make_bone_mesh(bone_cube)),
+                material,
+                transform,
+                ..default()
+            })
+            .insert(PickableBundle::default())
+            .insert(bevy_transform_gizmo::GizmoTransformable)
+            .insert(Name::from(bone_cube.name.clone()))
+            .insert(Bone { id: bone_id })
+            .id()
+    } else {
+       commands 
+            .spawn(PbrBundle {
+                mesh: meshes.add(make_bone_mesh(bone_cube)),
+                material,
+                transform,
+                ..default()
+            })
+            .insert(Name::from(bone_cube.name.clone()))
+            .insert(Bone { id: bone_id })
+            .id()
+    };
+    commands.entity(bone_parent).add_child(new_bone);
+    //spawn_entity_axis(commands, &mut meshes, &mut materials, Visibility::Visible);
     new_bone
 }
 
@@ -470,7 +466,7 @@ fn spawn_skeleton(
 
     let skeleton_parts = crate::skeleton::skelly();
     let mut bone_id = 1;
-    let axis_visible = false;
+    let axis_visible = Visibility::Hidden;
 
     let name = "Hips".to_string();
     let mut bone = skeleton_parts.get(&name).unwrap();
@@ -487,9 +483,8 @@ fn spawn_skeleton(
         .insert(Name::from(name))
         .insert(Bone { id: bone_id })
         .id();
-    commands.entity(hips).add_children(|parent| {
-        spawn_entity_axis(parent, &mut meshes, &mut materials, axis_visible);
-    });
+    //commands.entity(hips).add_child(hips)
+    //spawn_entity_axis(parent, &mut meshes, &mut materials, axis_visible);
     bone_id += 1;
 
     let mut transform = Transform::IDENTITY;
@@ -904,12 +899,13 @@ fn setup_ui(mut commands: Commands, my_assets: Res<YogaAssets>) {
         });
 }
 
+/*
 fn spawn_entity_axis(
-    commands: &mut ChildBuilder,
+    commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
-    initial_visibility: bool,
-) {
+    initial_visibility: Visibility,
+) -> Entity {
     let length = 7.0;
     let width = 0.1;
     //let x = Box::new(x_length, y_length, z_length);
@@ -920,16 +916,14 @@ fn spawn_entity_axis(
     let mut empty = commands.spawn_empty();
     empty
         .insert(TransformBundle::from_transform(Transform::IDENTITY))
-        .insert(Visibility {
-            is_visible: initial_visibility,
-        })
+        .insert(initial_visibility)
         .insert(ComputedVisibility::default())
         .insert(Name::from("bone axis"));
 
     let mut transform = Transform::default();
     transform.translation.x = length / 2.0;
 
-    empty.add_children(|parent| {
+    empty.with_children(|parent| {
         parent
             .spawn((
                 PbrBundle {
@@ -971,7 +965,8 @@ fn spawn_entity_axis(
             ))
             .insert(Name::from("z axis"));
     });
-}
+    empty
+}*/
 
 fn spawn_main_axis(
     mut commands: Commands,
@@ -989,7 +984,7 @@ fn spawn_main_axis(
     let empty: Entity = commands
         .spawn_empty()
         .insert(TransformBundle::from_transform(empty_transform))
-        .insert(Visibility { is_visible: false })
+        .insert(Visibility::Hidden)
         .insert(ComputedVisibility::default())
         .insert(Name::from("Main Axis"))
         .id();
@@ -997,14 +992,14 @@ fn spawn_main_axis(
     let mut transform = Transform::default();
     transform.translation.x = length / 2.0;
 
-    commands.entity(empty).add_children(|parent| {
+    commands.entity(empty).with_children(|parent| {
         parent
             .spawn((
                 PbrBundle {
                     mesh: meshes.add(Mesh::from(x)),
                     material: materials.add(Color::rgb(1.0, 0.0, 0.0).into()),
                     transform,
-                    visibility: Visibility { is_visible: true },
+                    visibility: Visibility::Inherited,
                     ..default()
                 },
                 NotShadowCaster,
@@ -1019,7 +1014,7 @@ fn spawn_main_axis(
                     mesh: meshes.add(Mesh::from(y)),
                     material: materials.add(Color::rgb(0.0, 1.0, 0.0).into()),
                     transform,
-                    visibility: Visibility { is_visible: true },
+                    visibility: Visibility::Inherited,
                     ..default()
                 },
                 NotShadowCaster,
@@ -1034,7 +1029,7 @@ fn spawn_main_axis(
                     mesh: meshes.add(Mesh::from(z)),
                     material: materials.add(Color::rgb(0.0, 0.0, 1.0).into()),
                     transform,
-                    visibility: Visibility { is_visible: true },
+                    visibility: Visibility::Inherited,
                     ..default()
                 },
                 NotShadowCaster,
