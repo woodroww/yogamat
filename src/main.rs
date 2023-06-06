@@ -105,9 +105,9 @@ impl YogaAssets {
 
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
-    let width = 1290.0;
+    let width = 1600.0;
     #[cfg(not(target_arch = "wasm32"))]
-    let height = 1400.0;
+    let height = 900.0;
     #[cfg(target_arch = "wasm32")]
     let width = 1000.0;
     #[cfg(target_arch = "wasm32")]
@@ -120,7 +120,7 @@ fn main() {
                 resolution: WindowResolution::new(width, height),
                 title: "YogaMat".to_string(),
                 resizable: true,
-                position: WindowPosition::At(IVec2::new(0, 0)),
+                position: WindowPosition::At(IVec2::new(1600, 0)),
                 ..default()
             }),
             ..default()
@@ -129,9 +129,9 @@ fn main() {
         .add_plugin(EguiPlugin) // either EguiPlugin or WorldInspectorPlugin, not both
         //.add_plugin(FilterQueryInspectorPlugin::<With<Bone>>::default())
         //.register_type::<PanOrbitCamera>() // bevy_inspector_egui for inspecting
+        .add_plugin(bevy_transform_gizmo::TransformGizmoPlugin)
         .add_plugin(CameraPlugin)
         .add_plugins(DefaultPickingPlugins)
-        .add_plugin(bevy_transform_gizmo::TransformGizmoPlugin::new(Quat::default()))
         .add_startup_system(spawn_skeleton)
         .add_startup_system(spawn_camera)
         .add_startup_system(spawn_main_axis)
@@ -418,7 +418,7 @@ fn spawn_bone(
     bone_parent: Entity,
     transform: Transform,
 ) -> Entity {
-    let pickable = false;
+    let pickable = true;
 
     let new_bone = if pickable {
         commands 
@@ -478,8 +478,8 @@ fn spawn_skeleton(
             material: material_handle.clone(),
             ..default()
         })
-        //.insert(PickableBundle::default())
-        //.insert(bevy_transform_gizmo::GizmoTransformable)
+        .insert(PickableBundle::default())
+        .insert(bevy_transform_gizmo::GizmoTransformable)
         .insert(Name::from(name))
         .insert(Bone { id: bone_id })
         .id();
