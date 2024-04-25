@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use bevy::{prelude::*, render::render_resource::PrimitiveTopology};
+use bevy::{prelude::*, render::{render_asset::RenderAssetUsages, render_resource::PrimitiveTopology}};
 use serde::{Serialize, Deserialize};
 
 pub struct JointMatrix {
@@ -155,7 +155,7 @@ pub fn make_bone_mesh(cube: &BoneCube) -> Mesh {
         triangles.push(corners[i[2]]);
     }
 
-    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::MAIN_WORLD);
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, triangles);
     mesh.compute_flat_normals();
     mesh
