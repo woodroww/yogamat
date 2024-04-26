@@ -390,7 +390,7 @@ fn spawn_mat(
     let material_handle = materials.add(material);
 
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(Cuboid::new(57.35, 0.5, 21.7))),
+        mesh: meshes.add(Mesh::from(Cuboid::new(57.35*2.0, 0.5*2.0, 21.7*2.0))),
         material: material_handle,
         transform: Transform::from_xyz(0.0, -109.5, 0.0),
         ..default()

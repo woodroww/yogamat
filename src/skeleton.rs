@@ -155,7 +155,7 @@ pub fn make_bone_mesh(cube: &BoneCube) -> Mesh {
         triangles.push(corners[i[2]]);
     }
 
-    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::MAIN_WORLD);
+    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD);
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, triangles);
     mesh.compute_flat_normals();
     mesh
