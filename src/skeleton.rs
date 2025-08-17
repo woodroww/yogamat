@@ -155,7 +155,8 @@ pub fn make_bone_mesh(cube: &BoneCube) -> Mesh {
         triangles.push(corners[i[2]]);
     }
 
-    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD);
+    // main_word needed for bevy picking
+    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD | RenderAssetUsages::MAIN_WORLD);
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, triangles);
     mesh.compute_flat_normals();
     mesh
