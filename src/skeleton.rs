@@ -15,7 +15,7 @@ pub struct BoneCube {
     z_bottom: f32,
     pub y: f32,
     inset: f32,
-    transform: Transform,
+    pub transform: Transform,
     pub name: String,
 }
 

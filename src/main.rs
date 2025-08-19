@@ -1,12 +1,9 @@
 use bevy::pbr::NotShadowCaster;
-use bevy::render::camera::Viewport;
 use bevy::{
     prelude::*,
-    window::{PrimaryWindow, WindowResolution},
+    window::WindowResolution,
 };
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass};
-use bevy_inspector_egui::bevy_egui::egui;
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_mod_outline::{ComputedOutline, OutlineMode, OutlineStencil, OutlineVolume};
 use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
@@ -29,8 +26,10 @@ struct AsanaName;
 
 #[derive(Component)]
 struct ResetViewButton;
+
 #[derive(Component)]
 struct UpButton;
+
 #[derive(Component)]
 struct DownButton;
 
@@ -116,7 +115,7 @@ fn main() {
     let height = 700.0;
 
     App::new()
-        //.insert_resource(ClearColor(Color::Srgba(Srgba::hex("292929").unwrap())))
+        .insert_resource(ClearColor(Color::Srgba(Srgba::hex("292929").unwrap())))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 resolution: WindowResolution::new(width, height),
@@ -128,8 +127,6 @@ fn main() {
             ..default()
         }))
         .add_plugins(EguiPlugin::default())
-        //.add_plugins(WorldInspectorPlugin::new())
-        //.add_plugins(MeshPickingPlugin)
         .add_plugins(TransformGizmoPlugin)
         .add_plugins(GizmoPickingPlugin)
         .add_plugins(PanOrbitCameraPlugin)
@@ -139,7 +136,7 @@ fn main() {
                 spawn_skeleton,
                 spawn_camera,
                 spawn_main_axis,
-                //setup_ui,
+                setup_ui,
                 spawn_mat,
             ),
         )
@@ -149,27 +146,22 @@ fn main() {
             Update,
             (
                 keyboard_input_system,
-                //button_clicked,
-                //update_camera_transform_system,
+                button_clicked,
             ),
         )
         .add_systems(EguiPrimaryContextPass, pose_egui)
-        .init_resource::<OccupiedScreenSpace>()
         .insert_resource(GizmoOptions {
             gizmo_modes: enum_set!(
-                GizmoMode::TranslateX | GizmoMode::TranslateY | GizmoMode::TranslateZ
+                GizmoMode::TranslateX
+                    | GizmoMode::TranslateY
+                    | GizmoMode::TranslateZ
+                    | GizmoMode::RotateX
+                    | GizmoMode::RotateY
+                    | GizmoMode::RotateZ
             ),
             ..default()
         })
         .run();
-}
-
-#[derive(Default, Resource)]
-struct OccupiedScreenSpace {
-    left: u32,
-    top: u32,
-    right: u32,
-    bottom: u32,
 }
 
 #[derive(Resource, Deref, DerefMut)]
@@ -177,13 +169,12 @@ struct OriginalCameraTransform(Transform);
 
 fn pose_egui(
     mut contexts: EguiContexts,
-    mut occupied_screen_space: ResMut<OccupiedScreenSpace>,
     mut yoga_assets: ResMut<YogaAssets>,
     bones: Query<(&mut Transform, &Bone)>,
     asana_text: Query<&mut Text, With<AsanaName>>,
 ) {
     let ctx = contexts.ctx_mut().unwrap();
-    occupied_screen_space.left = egui::SidePanel::left("left_panel")
+    egui::SidePanel::left("left_panel")
         .resizable(true)
         .show(ctx, |ui| {
             ui.vertical(|ui| {
@@ -221,27 +212,6 @@ fn pose_egui(
         .width() as u32;
 }
 
-fn update_camera_transform_system(
-    occupied_screen_space: Res<OccupiedScreenSpace>,
-    window: Query<&Window, With<PrimaryWindow>>,
-    mut camera_query: Query<&mut Camera>,
-) {
-    let window = window.single().unwrap();
-    let viewport_width =
-        window.physical_width() - occupied_screen_space.left - occupied_screen_space.right;
-    let viewport_height =
-        window.physical_height() - occupied_screen_space.top - occupied_screen_space.bottom;
-    // I guess the gizmo adds a camera ???
-    for mut camera in camera_query.iter_mut() {
-        if let Some(ref mut viewport) = camera.viewport {
-            viewport.physical_position.x = occupied_screen_space.left;
-            viewport.physical_position.y = occupied_screen_space.top;
-            viewport.physical_size.x = viewport_width;
-            viewport.physical_size.y = viewport_height;
-        }
-    }
-}
-
 fn initial_pose(
     mut yoga_assets: ResMut<YogaAssets>,
     bones: Query<(&mut Transform, &Bone)>,
@@ -260,8 +230,8 @@ fn set_pose(
         .sanskrit
         .clone();
 
-    //let mut change_me = asana_text.single_mut().unwrap();
-    //*change_me = Text::new(&name);
+    let mut change_me = asana_text.single_mut().unwrap();
+    *change_me = Text::new(&name);
 
     let pose_joints = load_pose(name, &yoga_assets);
     for (mut transform, bone) in bones.iter_mut() {
@@ -298,12 +268,7 @@ fn keyboard_input_system(
         let length = yoga_assets.asanas.asanas.len();
         yoga_assets.current_idx = (yoga_assets.current_idx + length - 1) % length;
         set_pose(yoga_assets, bones, asana_text);
-    } /*else if keyboard_input.just_pressed(KeyCode::KeyT) {
-        // for using gizmos
-        for mut pan_orbit in pan_orbit_query.iter_mut() {
-            pan_orbit.enabled = !pan_orbit.enabled;
-        }
-    }*/
+    }
 }
 
 fn deserialize_db() -> AsanaData {
@@ -352,20 +317,12 @@ fn spawn_camera(mut commands: Commands) {
     commands.spawn((
         Name::new("Camera"),
         Camera3d::default(),
-        /*
-        Camera {
-            viewport: Some(Viewport {
-                        physical_position: UVec2::new(100, 50),
-                        physical_size: UVec2::new(500, 500),
-                        ..Default::default()
-                    }),
-            ..default()
-        },
-        */
         transform,
         PanOrbitCamera {
             focus,
             radius: Some((transform.translation - focus).length()),
+            button_orbit: MouseButton::Left,
+            //modifier_orbit: Some(KeyCode::ControlLeft),
             ..Default::default()
         },
         GizmoCamera,
@@ -387,11 +344,13 @@ fn spawn_mat(
     };
     let material_handle = materials.add(material);
 
-    commands.spawn((
-        Mesh3d(meshes.add(Cuboid::new(57.35 * 2.0, 0.5 * 2.0, 21.7 * 2.0))),
-        Transform::from_xyz(0.0, -109.5, 0.0),
-        MeshMaterial3d(material_handle),
-    )).observe(bone_click);
+    commands
+        .spawn((
+            Mesh3d(meshes.add(Cuboid::new(57.35 * 2.0, 0.5 * 2.0, 21.7 * 2.0))),
+            Transform::from_xyz(0.0, -109.5, 0.0),
+            MeshMaterial3d(material_handle),
+        ))
+        .observe(bone_click);
 
     let height = 75.0;
     let x = 50.0;
@@ -430,22 +389,21 @@ fn spawn_mat(
 
 fn spawn_bone(
     commands: &mut Commands,
-    mut meshes: &mut ResMut<Assets<Mesh>>,
+    meshes: &mut ResMut<Assets<Mesh>>,
     material: Handle<StandardMaterial>,
-    mut materials: &mut ResMut<Assets<StandardMaterial>>,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
     bone_cube: &BoneCube,
     bone_id: i32,
     bone_parent: Entity,
-    transform: Transform,
 ) -> Entity {
-    let pickable = true;
+    let pickable = false;
+    let make_bone_axis = false;
     let new_bone = if pickable {
         commands
             .spawn((
                 Mesh3d(meshes.add(make_bone_mesh(bone_cube))),
-                transform,
+                Transform::IDENTITY,
                 MeshMaterial3d(material),
-                GizmoTarget::default(),
                 PickSelection { is_selected: false },
                 OutlineVolume {
                     visible: false,
@@ -464,7 +422,7 @@ fn spawn_bone(
         commands
             .spawn((
                 Mesh3d(meshes.add(make_bone_mesh(bone_cube))),
-                transform,
+                Transform::IDENTITY,
                 MeshMaterial3d(material),
                 Name::from(bone_cube.name.clone()),
                 Bone { id: bone_id },
@@ -472,8 +430,10 @@ fn spawn_bone(
             .id()
     };
     commands.entity(bone_parent).add_child(new_bone);
-    //let axis = spawn_entity_axis(commands, &mut meshes, &mut materials, Visibility::Visible);
-    //commands.entity(new_bone).add_child(axis);
+    if make_bone_axis {
+        let axis = spawn_entity_axis(commands, meshes, materials, Visibility::Visible);
+        commands.entity(new_bone).add_child(axis);
+    }
     new_bone
 }
 
@@ -482,6 +442,7 @@ fn spawn_skeleton(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    let make_bone_axis = false;
     let material = StandardMaterial {
         base_color: Color::srgba_u8(166, 116, 51, 255),
         //base_color: Color::rgba_u8(133, 0, 0, 255).into(),
@@ -497,27 +458,37 @@ fn spawn_skeleton(
 
     let name = "Hips".to_string();
     let mut bone = skeleton_parts.get(&name).unwrap();
-    let hip_bone = bone;
     let mesh = make_bone_mesh(bone);
     let hips = commands
         .spawn((
             Mesh3d(meshes.add(mesh)),
             MeshMaterial3d(material_handle.clone()),
-            //PickableBundle::default(),
-            //bevy_transform_gizmo::GizmoTransformable,
+            Transform::IDENTITY,
+            /*
+            PickSelection { is_selected: false },
+            OutlineVolume {
+                visible: false,
+                colour: Color::WHITE,
+                width: 2.0,
+            },
+            OutlineStencil::default(),
+            OutlineMode::default(),
+            ComputedOutline::default(),
+            */
             Name::from(name),
             Bone { id: bone_id },
         ))
         .observe(bone_click)
         .id();
 
-    //commands.entity(hips).add_child(hips)
-    //let axis = spawn_entity_axis(&mut commands, &mut meshes, &mut materials, axis_visible);
-    //commands.entity(hips).add_child(axis);
+    commands.entity(hips).add_child(hips);
+
+    if make_bone_axis {
+        let axis = spawn_entity_axis(&mut commands, &mut meshes, &mut materials, axis_visible);
+        commands.entity(hips).add_child(axis);
+    }
     bone_id += 1;
 
-    let mut transform = Transform::IDENTITY;
-    transform.translation += Vec3::new(7.5, -bone.y, 1.55);
     let name = "Left Femur".to_string();
     bone = skeleton_parts.get(&name).unwrap();
     let mut prev_entity = spawn_bone(
@@ -528,13 +499,10 @@ fn spawn_skeleton(
         bone,
         bone_id,
         hips,
-        transform,
     );
     bone_id += 1;
 
     let name = "Left Calf".to_string();
-    let mut transform = Transform::IDENTITY;
-    transform.translation += Vec3::new(0.0, -bone.y, 0.0);
     let bone = skeleton_parts.get(&name).unwrap();
     prev_entity = spawn_bone(
         &mut commands,
@@ -544,13 +512,10 @@ fn spawn_skeleton(
         bone,
         bone_id,
         prev_entity,
-        transform,
     );
     bone_id += 1;
 
     let name = "Left Foot".to_string();
-    let mut transform = Transform::IDENTITY;
-    transform.translation += Vec3::new(0.0, -bone.y, 0.0);
     let bone = skeleton_parts.get(&name).unwrap();
     _ = spawn_bone(
         &mut commands,
@@ -560,13 +525,10 @@ fn spawn_skeleton(
         bone,
         bone_id,
         prev_entity,
-        transform,
     );
     bone_id += 1;
 
     let name = "Right Femur".to_string();
-    let mut transform = Transform::IDENTITY;
-    transform.translation += Vec3::new(-7.5, -hip_bone.y, 1.55);
     let bone = skeleton_parts.get(&name).unwrap();
     prev_entity = spawn_bone(
         &mut commands,
@@ -576,13 +538,10 @@ fn spawn_skeleton(
         bone,
         bone_id,
         hips,
-        transform,
     );
     bone_id += 1;
 
     let name = "Right Calf".to_string();
-    let mut transform = Transform::IDENTITY;
-    transform.translation += Vec3::new(0.0, -bone.y, 0.0);
     let bone = skeleton_parts.get(&name).unwrap();
     prev_entity = spawn_bone(
         &mut commands,
@@ -592,13 +551,10 @@ fn spawn_skeleton(
         bone,
         bone_id,
         prev_entity,
-        transform,
     );
     bone_id += 1;
 
     let name = "Right Foot".to_string();
-    let mut transform = Transform::IDENTITY;
-    transform.translation += Vec3::new(0.0, -bone.y, 0.0);
     let bone = skeleton_parts.get(&name).unwrap();
     _ = spawn_bone(
         &mut commands,
@@ -608,7 +564,6 @@ fn spawn_skeleton(
         bone,
         bone_id,
         prev_entity,
-        transform,
     );
     bone_id += 1;
 
@@ -618,14 +573,6 @@ fn spawn_skeleton(
     let l_spine_length = 9.0;
 
     for i in (1..=5).rev() {
-        let mut transform = Transform::IDENTITY;
-        if i == 5 {
-            // this is 0, 0, 0 in original
-            // /Users/matt/Documents/former_desktop/My\ PROJECT/shared\ source/Skeleton.m
-            transform.translation += Vec3::new(0.0, -hip_bone.y, 0.0);
-        } else {
-            transform.translation += Vec3::new(0.0, -l_spine_length / 5.0, 0.0);
-        }
         prev_entity = spawn_bone(
             &mut commands,
             &mut meshes,
@@ -634,7 +581,6 @@ fn spawn_skeleton(
             bone,
             bone_id,
             prev_entity,
-            transform,
         );
         bone_id += 1;
     }
@@ -643,12 +589,6 @@ fn spawn_skeleton(
     let bone = skeleton_parts.get(&name).unwrap();
     let t_spine_length = 19.0;
     for i in (1..=12).rev() {
-        let mut transform = Transform::IDENTITY;
-        if i == 12 {
-            transform.translation += Vec3::new(0.0, -l_spine_length / 5.0, 0.0);
-        } else {
-            transform.translation += Vec3::new(0.0, -t_spine_length / 12.0, 0.0);
-        }
         prev_entity = spawn_bone(
             &mut commands,
             &mut meshes,
@@ -657,7 +597,6 @@ fn spawn_skeleton(
             bone,
             bone_id,
             prev_entity,
-            transform,
         );
         bone_id += 1;
     }
@@ -667,12 +606,6 @@ fn spawn_skeleton(
     let c_spine_length = 8.0;
     let mut c7 = prev_entity;
     for i in (1..=7).rev() {
-        let mut transform = Transform::IDENTITY;
-        if i == 12 {
-            transform.translation += Vec3::new(0.0, -t_spine_length / 12.0, 0.0);
-        } else {
-            transform.translation += Vec3::new(0.0, -c_spine_length / 7.0, 0.0);
-        }
         bone.name = format!("{name} {i}");
         prev_entity = spawn_bone(
             &mut commands,
@@ -682,7 +615,6 @@ fn spawn_skeleton(
             &bone,
             bone_id,
             prev_entity,
-            transform,
         );
         if i == 7 {
             c7 = prev_entity;
@@ -692,8 +624,6 @@ fn spawn_skeleton(
 
     let name = "Head".to_string();
     let bone = skeleton_parts.get(&name).unwrap();
-    let mut transform = Transform::IDENTITY;
-    transform.translation += Vec3::new(0.0, -c_spine_length / 7.0, 0.0);
     _ = spawn_bone(
         &mut commands,
         &mut meshes,
@@ -702,15 +632,12 @@ fn spawn_skeleton(
         bone,
         bone_id,
         c7,
-        transform,
     );
     bone_id += 1;
 
     info!("left clavical id {}", bone_id);
     let name = "Left Clavical".to_string();
     let bone = skeleton_parts.get(&name).unwrap();
-    let mut transform = Transform::IDENTITY;
-    transform.translation += Vec3::new(0.0, 0.0, -5.0);
     prev_entity = spawn_bone(
         &mut commands,
         &mut meshes,
@@ -719,13 +646,10 @@ fn spawn_skeleton(
         bone,
         bone_id,
         c7,
-        transform,
     );
     bone_id += 1;
 
     let name = "Left Arm".to_string();
-    let mut transform = Transform::IDENTITY;
-    transform.translation += Vec3::new(0.0, -bone.y, 0.0);
     let bone = skeleton_parts.get(&name).unwrap();
     prev_entity = spawn_bone(
         &mut commands,
@@ -735,13 +659,10 @@ fn spawn_skeleton(
         bone,
         bone_id,
         prev_entity,
-        transform,
     );
     bone_id += 1;
 
     let name = "Left Forearm".to_string();
-    let mut transform = Transform::IDENTITY;
-    transform.translation += Vec3::new(0.0, -bone.y, 0.0);
     let bone = skeleton_parts.get(&name).unwrap();
     prev_entity = spawn_bone(
         &mut commands,
@@ -751,13 +672,10 @@ fn spawn_skeleton(
         bone,
         bone_id,
         prev_entity,
-        transform,
     );
     bone_id += 1;
 
     let name = "Left Hand".to_string();
-    let mut transform = Transform::IDENTITY;
-    transform.translation += Vec3::new(0.0, -bone.y, 0.0);
     let bone = skeleton_parts.get(&name).unwrap();
     _ = spawn_bone(
         &mut commands,
@@ -767,7 +685,6 @@ fn spawn_skeleton(
         bone,
         bone_id,
         prev_entity,
-        transform,
     );
     bone_id += 1;
 
@@ -775,8 +692,6 @@ fn spawn_skeleton(
 
     info!("right clavical id {}", bone_id);
     let name = "Right Clavical".to_string();
-    let mut transform = Transform::IDENTITY;
-    transform.translation += Vec3::new(0.0, 0.0, -5.0);
     let bone = skeleton_parts.get(&name).unwrap();
     prev_entity = spawn_bone(
         &mut commands,
@@ -786,13 +701,10 @@ fn spawn_skeleton(
         bone,
         bone_id,
         prev_entity,
-        transform,
     );
     bone_id += 1;
 
     let name = "Right Arm".to_string();
-    let mut transform = Transform::IDENTITY;
-    transform.translation += Vec3::new(0.0, -bone.y, 0.0);
     let bone = skeleton_parts.get(&name).unwrap();
     prev_entity = spawn_bone(
         &mut commands,
@@ -802,13 +714,10 @@ fn spawn_skeleton(
         bone,
         bone_id,
         prev_entity,
-        transform,
     );
     bone_id += 1;
 
     let name = "Right Forearm".to_string();
-    let mut transform = Transform::IDENTITY;
-    transform.translation += Vec3::new(0.0, -bone.y, 0.0);
     let bone = skeleton_parts.get(&name).unwrap();
     prev_entity = spawn_bone(
         &mut commands,
@@ -818,13 +727,10 @@ fn spawn_skeleton(
         bone,
         bone_id,
         prev_entity,
-        transform,
     );
     bone_id += 1;
 
     let name = "Right Hand".to_string();
-    let mut transform = Transform::IDENTITY;
-    transform.translation += Vec3::new(0.0, -bone.y, 0.0);
     let bone = skeleton_parts.get(&name).unwrap();
     _ = spawn_bone(
         &mut commands,
@@ -834,36 +740,35 @@ fn spawn_skeleton(
         bone,
         bone_id,
         prev_entity,
-        transform,
     );
 }
 
-    /*
 fn button_clicked(
-    // mut query: Query<(&mut PanOrbitCamera, &mut Transform)>,
-    _interactions: Query<&Interaction, (With<ResetViewButton>, Changed<Interaction>)>,
+    mut cam_query: Query<(&mut PanOrbitCamera, &mut Transform)>,
+    interactions: Query<&Interaction, (With<ResetViewButton>, Changed<Interaction>)>,
 ) {
-    for interaction in &interactions {
-        if matches!(interaction, Interaction::Clicked) {
+    for interaction in interactions {
+        if let Interaction::Pressed = interaction {
             let (default_transform, default_focus) = default_viewpoint();
-            if let Ok((mut pan_orbit, mut transform)) = query.get_single_mut() {
-                pan_orbit.focus = default_focus;
+            if let Ok((mut pan_orbit, mut transform)) = cam_query.single_mut() {
+                pan_orbit.target_focus = default_focus;
                 *transform = default_transform;
-                pan_orbit.upside_down = false;
-                pan_orbit.radius = (transform.translation - default_focus).length();
+                pan_orbit.force_update = true;
+                pan_orbit.is_upside_down = false;
+                pan_orbit.target_radius = (transform.translation - default_focus).length();
             }
         }
     }
 }
-    */
 
 fn setup_ui(mut commands: Commands, my_assets: Res<YogaAssets>) {
     commands
         .spawn((
             Node {
                 width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                justify_content: JustifyContent::FlexStart, // horizontally
+                height: Val::Percent(20.0),
+                justify_content: JustifyContent::Center, // horizontally
+                align_items: AlignItems::Center,         // vertically
                 flex_direction: FlexDirection::Column,
                 ..default()
             },
@@ -874,7 +779,8 @@ fn setup_ui(mut commands: Commands, my_assets: Res<YogaAssets>) {
             commands.spawn((
                 Name::new("AsanaName"),
                 Node {
-                    align_self: AlignSelf::Center, // TODO: is this self right
+                    justify_content: JustifyContent::Center, // horizontally
+                    align_items: AlignItems::Center,         // vertically
                     margin: UiRect::all(Val::Px(5.0)),
                     ..default()
                 },
@@ -889,42 +795,41 @@ fn setup_ui(mut commands: Commands, my_assets: Res<YogaAssets>) {
                     TextColor(my_assets.font_color),
                 )],
             ));
-        });
-
-    commands
-        .spawn((
-            Button,
-            ResetViewButton,
-            Node {
-                width: Val::Px(80.0),
-                height: Val::Px(40.0),
-                align_self: AlignSelf::Center,
-                justify_content: JustifyContent::FlexStart, // horizontally
-                margin: UiRect::all(Val::Percent(2.0)),
-                ..default()
-            },
-            BackgroundColor(Color::srgb_u8(28, 31, 33)),
-        ))
-        .with_children(|commands| {
-            commands.spawn((
-                Node {
-                    width: Val::Px(80.0),
-                    height: Val::Px(40.0),
-                    align_self: AlignSelf::Center,
-                    justify_content: JustifyContent::Center, // horizontally
-                    margin: UiRect::all(Val::Percent(3.0)),
-                    ..default()
-                },
-                children![(
-                    Text::new("Reset View"),
-                    TextFont {
-                        font: my_assets.font.clone(),
-                        font_size: 18.0,
+            commands
+                .spawn((
+                    Button,
+                    ResetViewButton,
+                    Node {
+                        width: Val::Px(100.0),
+                        height: Val::Px(40.0),
+                        justify_content: JustifyContent::Center, // horizontally
+                        align_items: AlignItems::Center,         // vertically
+                        margin: UiRect::all(Val::Percent(2.0)),
                         ..default()
                     },
-                    TextColor(my_assets.font_color),
-                )],
-            ));
+                    BackgroundColor(Color::srgb_u8(28, 31, 33)),
+                ))
+                .with_children(|commands| {
+                    commands.spawn((
+                        Node {
+                            width: Val::Px(100.0),
+                            height: Val::Px(40.0),
+                            justify_content: JustifyContent::Center, // horizontally
+                            align_items: AlignItems::Center,         // vertically
+                            margin: UiRect::all(Val::Percent(3.0)),
+                            ..default()
+                        },
+                        children![(
+                            Text::new("Reset View"),
+                            TextFont {
+                                font: my_assets.font.clone(),
+                                font_size: 18.0,
+                                ..default()
+                            },
+                            TextColor(my_assets.font_color),
+                        )],
+                    ));
+                });
         });
 }
 
@@ -1061,36 +966,14 @@ fn spawn_main_axis(
 
 fn bone_click(
     mut click: Trigger<Pointer<Released>>,
-    mut commands: Commands,
     bones: Query<&Bone>,
-    pickable: Query<(
-        Entity,
-        &mut PickSelection,
-        &mut OutlineVolume,
-        Option<&GizmoTarget>,
-    )>,
 ) {
     click.propagate(false);
+    /*
     if let Ok(bone) = bones.get(click.target) {
         println!("{} bone click", bone.id);
     } else {
         println!("some other click");
-    }
-
-    /*
-    for (entity, mut pick, mut outline, gizmo_target) in pickable {
-        let mut entity_cmd = commands.entity(entity);
-        if click.target == entity {
-            pick.is_selected = true;
-            if gizmo_target.is_none() {
-                entity_cmd.insert(GizmoTarget::default());
-            }
-            outline.visible = true;
-        } else {
-            entity_cmd.remove::<GizmoTarget>();
-            outline.visible = false;
-            pick.is_selected = false;
-        }
     }
 */
 }

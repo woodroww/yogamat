@@ -48,16 +48,13 @@ pub fn update_picking(
 ) {
     for (entity, pick_interaction, mut outline, gizmo_target) in &mut targets {
         let mut entity_cmd = commands.entity(entity);
-
         if pick_interaction.is_selected {
             if gizmo_target.is_none() {
                 entity_cmd.insert(GizmoTarget::default());
             }
-
             outline.visible = true;
         } else {
             entity_cmd.remove::<GizmoTarget>();
-
             outline.visible = false;
         }
     }
