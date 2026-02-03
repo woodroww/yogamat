@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use bevy::{prelude::*, render::{render_asset::RenderAssetUsages, render_resource::PrimitiveTopology}};
+use bevy::{asset::RenderAssetUsages, prelude::*, render::render_resource::PrimitiveTopology};
 use bincode::{Decode, Encode};
 use serde::{Serialize, Deserialize};
 

@@ -19,20 +19,29 @@ name = "yogamat_wasm"
 crate-type = ["cdylib", "rlib"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-bevy = { version = "0.16.1" }
+# bevy = { version = "0.16.1" }
+bevy = { version = "0.18.0" }
 rusqlite = "0.37.0"
+# rusqlite = "0.38.0"
 
 [dependencies]
-bevy = { version = "0.16.1", features = ["serialize", "bevy_ui"] }
-fuzzy-matcher = "0.3.7"
-#bevy-inspector-egui = "0.32.0"
-bevy_egui = "0.36.0"
+# bevy = { version = "0.16.1", features = ["serialize", "bevy_ui"] }
+bevy = { version = "0.18.0", features = ["serialize", "bevy_ui"] }
+# bevy_egui = "0.36.0"
+bevy_egui = "0.39.0"
 bincode = { version = "2.0.1", features =["serde", "derive"] }
+# bincode = { version = "2.0.1", features =["serde", "derive"] }
 serde = "1.0.219"
+# serde = "1.0.228"
 wasm-bindgen = "0.2.100"
-bevy_panorbit_camera = { version = "0.28.0", features = ["bevy_egui"] }
-transform-gizmo-bevy = "0.6.0"
-bevy_mod_outline = "0.10.2"
-egui = "0.32.1"
-#bevy_gltf_kun = "0.2.0"
-#gltf_kun = "0.2.0"
+# wasm-bindgen = "0.2.108"
+# bevy_panorbit_camera = { version = "0.28.0", features = ["bevy_egui"] }
+bevy_panorbit_camera = { version = "0.34.0", features = ["bevy_egui"] }
+##transform-gizmo-bevy = "0.6.0"
+## transform-gizmo-bevy = "0.8.0"
+# bevy_mod_outline = "0.10.2"
+# bevy_mod_outline = "0.10.3"
+egui = "0.33.3"
+
+#egui = "0.32.1"
+fuzzy-matcher = "0.3.7"

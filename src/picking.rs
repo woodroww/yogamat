@@ -15,7 +15,7 @@ pub struct GizmoPickingPlugin;
 
 impl Plugin for GizmoPickingPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_plugins(OutlinePlugin)
+        app//.add_plugins(OutlinePlugin)
             .add_plugins(MeshPickingPlugin)
             .add_systems(PreUpdate, toggle_picking_enabled)
             .add_systems(Update, update_picking)
@@ -25,7 +25,7 @@ impl Plugin for GizmoPickingPlugin {
 
 fn toggle_picking_enabled(
     gizmo_targets: Query<&GizmoTarget>,
-    mut picking_settings: ResMut<PickingPlugin>,
+    mut picking_settings: ResMut<PickingSettings>,
 ) {
     // Picking is disabled when any of the gizmos is focused or active.
 

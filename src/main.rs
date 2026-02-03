@@ -1,15 +1,17 @@
-use bevy::pbr::NotShadowCaster;
+use bevy::light::NotShadowCaster;
 use bevy::{prelude::*, window::WindowResolution};
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass};
-use bevy_mod_outline::{ComputedOutline, OutlineMode, OutlineStencil, OutlineVolume};
+//use bevy_mod_outline::{ComputedOutline, OutlineMode, OutlineStencil, OutlineVolume};
 use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use yogamat_wasm::AsanaData;
 use std::collections::BTreeMap;
+/*
 use transform_gizmo_bevy::{
     enum_set, GizmoCamera, GizmoMode, GizmoOptions, TransformGizmoPlugin,
 };
-use yogamat_wasm::picking::{GizmoPickingPlugin, PickSelection};
+*/
+//use yogamat_wasm::picking::{GizmoPickingPlugin, PickSelection};
 use yogamat_wasm::skeleton::{self, make_bone_mesh, BoneCube, JointMatrix};
 
 #[derive(Component)]
@@ -89,13 +91,13 @@ impl YogaAssets {
 
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
-    let width = 1600.0;
+    let width = 1600;
     #[cfg(not(target_arch = "wasm32"))]
-    let height = 900.0;
+    let height = 900;
     #[cfg(target_arch = "wasm32")]
-    let width = 1000.0;
+    let width = 1000;
     #[cfg(target_arch = "wasm32")]
-    let height = 700.0;
+    let height = 700;
 
     App::new()
         .insert_resource(ClearColor(Color::Srgba(Srgba::hex("292929").unwrap())))
@@ -110,8 +112,8 @@ fn main() {
             ..default()
         }))
         .add_plugins(EguiPlugin::default())
-        .add_plugins(TransformGizmoPlugin)
-        .add_plugins(GizmoPickingPlugin)
+        //.add_plugins(TransformGizmoPlugin)
+        //.add_plugins(GizmoPickingPlugin)
         .add_plugins(PanOrbitCameraPlugin)
         .add_systems(
             Startup,
@@ -128,6 +130,7 @@ fn main() {
         .add_systems(PostStartup, initial_pose)
         .add_systems(Update, (keyboard_input_system, button_clicked))
         .add_systems(EguiPrimaryContextPass, pose_egui)
+        /*
         .insert_resource(GizmoOptions {
             gizmo_modes: enum_set!(
                 GizmoMode::TranslateX
@@ -139,6 +142,7 @@ fn main() {
             ),
             ..default()
         })
+            */
         .register_type::<MeshMaterial3d<StandardMaterial>>()
         //.register_type_data::<MeshMaterial3d<StandardMaterial>, ReflectSerialize>()
         .run();
@@ -321,7 +325,7 @@ fn spawn_camera(mut commands: Commands) {
             //modifier_orbit: Some(KeyCode::ControlLeft),
             ..Default::default()
         },
-        GizmoCamera,
+        //GizmoCamera,
     ));
 
     commands.insert_resource(OriginalCameraTransform(transform));
@@ -401,7 +405,8 @@ fn spawn_bone(
                 Mesh3d(meshes.add(make_bone_mesh(bone_cube))),
                 Transform::IDENTITY,
                 MeshMaterial3d(material),
-                PickSelection { is_selected: false },
+                /*
+PickSelection { is_selected: false },
                 OutlineVolume {
                     visible: false,
                     colour: Color::WHITE,
@@ -410,6 +415,7 @@ fn spawn_bone(
                 OutlineStencil::default(),
                 OutlineMode::default(),
                 ComputedOutline::default(),
+*/
                 Name::from(bone_cube.name.clone()),
                 Bone { id: bone_id, skeleton_id },
             ))
@@ -476,6 +482,7 @@ fn spawn_skeleton(
             Mesh3d(meshes.add(mesh)),
             MeshMaterial3d(material_handle.clone()),
             Transform::IDENTITY,
+            /*
             PickSelection { is_selected: false },
             OutlineVolume {
                 visible: false,
@@ -485,6 +492,7 @@ fn spawn_skeleton(
             OutlineStencil::default(),
             OutlineMode::default(),
             ComputedOutline::default(),
+*/
             Name::from(name),
             Bone { id: bone_id, skeleton_id },
         ))
@@ -1002,7 +1010,7 @@ fn spawn_main_axis(
     });
 }
 
-fn bone_click(mut click: Trigger<Pointer<Released>>, _bones: Query<&Bone>) {
+fn bone_click(mut click: On<Pointer<Release>>, _bones: Query<&Bone>) {
     click.propagate(false);
     /*
         if let Ok(bone) = bones.get(click.target) {
