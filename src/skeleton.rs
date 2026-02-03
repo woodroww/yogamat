@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use bevy::{prelude::*, render::{render_asset::RenderAssetUsages, render_resource::PrimitiveTopology}};
+use bincode::{Decode, Encode};
 use serde::{Serialize, Deserialize};
 
 pub struct JointMatrix {
@@ -19,7 +20,7 @@ pub struct BoneCube {
     pub name: String,
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize, Decode, Encode)]
 pub struct Joint {
     pub joint_id: i32,
     pub pose_id: i32,

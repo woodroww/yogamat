@@ -1,17 +1,39 @@
+use yogamat_wasm::Asana;
+use rusqlite::Connection;
+use std::{collections::HashMap, fs::File, io::{Read, Write}};
+use yogamat_wasm::{skeleton::Joint, AsanaData};
+
+fn main() {
+    serialize_db();
+    let data: AsanaData = deserialize_db();
+    println!("{:#?}", data.asanas);
+}
+
+fn deserialize_db() -> AsanaData {
+    let mut db_file = File::options()
+        .read(true)
+        .open("out_db.new")
+        .expect("file couldn't be read");
+    let mut db = Vec::new();
+    let _bytes_read = db_file.read_to_end(&mut db).expect("error reading file");
+    bincode::decode_from_slice(&db, bincode::config::legacy())
+        .unwrap()
+        .0
+}
+
 #[cfg(not(target_arch = "wasm32"))]
-fn get_asanas_from_db() -> Vec<AsanaDB> {
+fn get_asanas_from_db() -> Vec<Asana> {
     let path = "./yogamatdb.sql";
     let db = Connection::open(path).expect("couldn't open database");
-    //let sql = "select asanaID, sanskritName, englishName, userNotes from asana";
     let sql = r#"
 SELECT a.poseId, a.asanaID, b.sanskritName, b.englishName, b.userNotes
 FROM pose a, asana b
 WHERE a.asanaID = b.asanaID;
 "#;
-    let mut stmt = db.prepare(&sql).expect("trouble preparing statement");
+    let mut stmt = db.prepare(sql).expect("trouble preparing statement");
     let response = stmt
         .query_map([], |row| {
-            Ok(AsanaDB {
+            Ok(Asana {
                 pose_id: row.get(0).expect("poseId"),
                 asana_id: row.get(1).expect("asanaID"),
                 sanskrit: row.get(2).expect("sanskritName"),
@@ -20,11 +42,9 @@ WHERE a.asanaID = b.asanaID;
             })
         })
         .expect("bad");
-    let asanas = response
+    response
         .filter_map(|result| result.ok())
-        .collect::<Vec<AsanaDB>>();
-
-    asanas
+        .collect::<Vec<Asana>>()
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -61,22 +81,20 @@ fn serialize_db() {
         let joints = response
             .filter_map(|result| result.ok())
             .collect::<Vec<Joint>>();
-        // do we store the matrices instead of these joints at some point in the future?
-        /*let matrices = joints.iter().map(|joint| JointMatrix {
-            mat: joint.matrix(),
-            joint_id: joint.joint_id,
-        }).collect::<Vec<JointMatrix>>();*/
         let already = data.poses.insert(asana.pose_id, joints);
         assert!(already.is_none());
     }
+    let config = bincode::config::standard()
+        .with_little_endian()
+        .with_fixed_int_encoding();
 
-    let encoded: Vec<u8> = bincode::serialize(&data).unwrap();
+    let encoded: Vec<u8> = bincode::encode_to_vec(&data, config).unwrap();
     let mut out_file = File::options()
         .write(true)
         .create(true)
         .truncate(true)
-        .open("out_db")
-        .expect("file couldn't be opened");
+        .open("out_db.new")
+        .expect("file couldn't be created");
     let success = out_file.write_all(&encoded);
     match success {
         Ok(_) => println!("encoded db written to out_db"),

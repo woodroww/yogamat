@@ -1,22 +1,16 @@
 use bevy::pbr::NotShadowCaster;
-use bevy::{
-    prelude::*,
-    window::WindowResolution,
-};
+use bevy::{prelude::*, window::WindowResolution};
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass};
 use bevy_mod_outline::{ComputedOutline, OutlineMode, OutlineStencil, OutlineVolume};
 use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
-use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use yogamat_wasm::AsanaData;
+use std::collections::BTreeMap;
 use transform_gizmo_bevy::{
-    enum_set, GizmoCamera, GizmoMode, GizmoOptions, GizmoTarget, TransformGizmoPlugin,
+    enum_set, GizmoCamera, GizmoMode, GizmoOptions, TransformGizmoPlugin,
 };
 use yogamat_wasm::picking::{GizmoPickingPlugin, PickSelection};
-use yogamat_wasm::skeleton::{self, make_bone_mesh, BoneCube, Joint, JointMatrix};
-
-#[cfg(not(target_arch = "wasm32"))]
-use rusqlite::Connection;
+use yogamat_wasm::skeleton::{self, make_bone_mesh, BoneCube, JointMatrix};
 
 #[derive(Component)]
 struct MainMenu;
@@ -47,25 +41,16 @@ pub struct YogaAssets {
 #[derive(Component)]
 struct Bone {
     id: i32,
+    skeleton_id: i32,
+}
+
+#[derive(Component)]
+struct Skeleton {
+    id: i32,
 }
 
 #[derive(Component)]
 struct BoneAxis;
-
-#[derive(Debug, Serialize, Deserialize)]
-struct AsanaDB {
-    asana_id: i32,
-    pose_id: i32,
-    sanskrit: String,
-    english: String,
-    notes: Option<String>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct AsanaData {
-    asanas: Vec<AsanaDB>,
-    poses: HashMap<i32, Vec<Joint>>,
-}
 
 impl YogaAssets {
     fn search(&mut self) {
@@ -102,8 +87,6 @@ impl YogaAssets {
     }
 }
 
-//static DB: &[u8] = include_bytes!("../yogamatdb.sql");
-
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     let width = 1600.0;
@@ -133,22 +116,17 @@ fn main() {
         .add_systems(
             Startup,
             (
-                spawn_skeleton,
+                spawn_main_skeleton,
                 spawn_camera,
                 spawn_main_axis,
                 setup_ui,
                 spawn_mat,
-            ),
+                //export_scene,
+            ).chain(),
         )
         .add_systems(PreStartup, load_resources)
         .add_systems(PostStartup, initial_pose)
-        .add_systems(
-            Update,
-            (
-                keyboard_input_system,
-                button_clicked,
-            ),
-        )
+        .add_systems(Update, (keyboard_input_system, button_clicked))
         .add_systems(EguiPrimaryContextPass, pose_egui)
         .insert_resource(GizmoOptions {
             gizmo_modes: enum_set!(
@@ -161,6 +139,8 @@ fn main() {
             ),
             ..default()
         })
+        .register_type::<MeshMaterial3d<StandardMaterial>>()
+        //.register_type_data::<MeshMaterial3d<StandardMaterial>, ReflectSerialize>()
         .run();
 }
 
@@ -170,7 +150,7 @@ struct OriginalCameraTransform(Transform);
 fn pose_egui(
     mut contexts: EguiContexts,
     mut yoga_assets: ResMut<YogaAssets>,
-    bones: Query<(&mut Transform, &Bone)>,
+    bones: Query<(Entity, &mut Transform, &Bone)>,
     asana_text: Query<&mut Text, With<AsanaName>>,
 ) {
     let ctx = contexts.ctx_mut().unwrap();
@@ -206,15 +186,12 @@ fn pose_egui(
                     }
                 });
             });
-        })
-        .response
-        .rect
-        .width() as u32;
+        });
 }
 
 fn initial_pose(
     mut yoga_assets: ResMut<YogaAssets>,
-    bones: Query<(&mut Transform, &Bone)>,
+    bones: Query<(Entity, &mut Transform, &Bone)>,
     asana_text: Query<&mut Text, With<AsanaName>>,
 ) {
     yoga_assets.current_idx = 127;
@@ -223,7 +200,7 @@ fn initial_pose(
 
 fn set_pose(
     yoga_assets: ResMut<YogaAssets>,
-    mut bones: Query<(&mut Transform, &Bone)>,
+    mut bones: Query<(Entity, &mut Transform, &Bone)>,
     mut asana_text: Query<&mut Text, With<AsanaName>>,
 ) {
     let name = yoga_assets.asanas.asanas[yoga_assets.current_idx]
@@ -233,10 +210,28 @@ fn set_pose(
     let mut change_me = asana_text.single_mut().unwrap();
     *change_me = Text::new(&name);
 
-    let pose_joints = load_pose(name, &yoga_assets);
-    for (mut transform, bone) in bones.iter_mut() {
-        let pose_mat = pose_joints.iter().find(|j| j.joint_id == bone.id).unwrap();
-        *transform = Transform::from_matrix(pose_mat.mat);
+    let tadasana = load_pose("Tadasana", &yoga_assets);
+    let pose_joints = load_pose(&name, &yoga_assets);
+    let virasana = load_pose("Virasana", &yoga_assets);
+    let matsyendrasana = load_pose("Ardha Matsyendrasana", &yoga_assets);
+
+    for (_entity, mut transform, bone) in bones.iter_mut() {
+        if bone.skeleton_id == 0 {
+            let pose_mat = tadasana.iter().find(|j| j.joint_id == bone.id).unwrap();
+            *transform = Transform::from_matrix(pose_mat.mat);
+        }
+        if bone.skeleton_id == 1 {
+            let pose_mat = pose_joints.iter().find(|j| j.joint_id == bone.id).unwrap();
+            *transform = Transform::from_matrix(pose_mat.mat);
+        }
+        if bone.skeleton_id == 2 {
+            let pose_mat = virasana.iter().find(|j| j.joint_id == bone.id).unwrap();
+            *transform = Transform::from_matrix(pose_mat.mat);
+        }
+        if bone.skeleton_id == 3 {
+            let pose_mat = matsyendrasana.iter().find(|j| j.joint_id == bone.id).unwrap();
+            *transform = Transform::from_matrix(pose_mat.mat);
+        }
     }
 }
 
@@ -257,9 +252,8 @@ fn load_resources(mut commands: Commands, asset_server: Res<AssetServer>) {
 fn keyboard_input_system(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut yoga_assets: ResMut<YogaAssets>,
-    bones: Query<(&mut Transform, &Bone)>,
+    bones: Query<(Entity, &mut Transform, &Bone)>,
     asana_text: Query<&mut Text, With<AsanaName>>,
-    //mut pan_orbit_query: Query<&mut PanOrbitCamera>,
 ) {
     if keyboard_input.just_pressed(KeyCode::ArrowUp) {
         yoga_assets.current_idx = (yoga_assets.current_idx + 1) % yoga_assets.asanas.asanas.len();
@@ -275,10 +269,12 @@ fn deserialize_db() -> AsanaData {
     // asanas: Vec<AsanaDB>,
     // poses: HashMap<i32, Vec<Joint>>,
     let db = include_bytes!("../out_db");
-    bincode::deserialize(db).unwrap()
+    bincode::decode_from_slice(db, bincode::config::legacy())
+        .unwrap()
+        .0
 }
 
-fn load_pose(sanskrit: String, yoga: &YogaAssets) -> Vec<JointMatrix> {
+fn load_pose(sanskrit: &str, yoga: &YogaAssets) -> Vec<JointMatrix> {
     let asana = yoga
         .asanas
         .asanas
@@ -395,6 +391,7 @@ fn spawn_bone(
     bone_cube: &BoneCube,
     bone_id: i32,
     bone_parent: Entity,
+    skeleton_id: i32,
 ) -> Entity {
     let pickable = false;
     let make_bone_axis = false;
@@ -414,7 +411,7 @@ fn spawn_bone(
                 OutlineMode::default(),
                 ComputedOutline::default(),
                 Name::from(bone_cube.name.clone()),
-                Bone { id: bone_id },
+                Bone { id: bone_id, skeleton_id },
             ))
             .observe(bone_click)
             .id()
@@ -425,7 +422,7 @@ fn spawn_bone(
                 Transform::IDENTITY,
                 MeshMaterial3d(material),
                 Name::from(bone_cube.name.clone()),
-                Bone { id: bone_id },
+                Bone { id: bone_id, skeleton_id },
             ))
             .id()
     };
@@ -437,15 +434,30 @@ fn spawn_bone(
     new_bone
 }
 
-fn spawn_skeleton(
+fn spawn_main_skeleton(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    spawn_skeleton(commands.reborrow(), &mut meshes, &mut materials, 0, Transform::IDENTITY);
+    let trans = Transform::from_translation(Vec3::new(50.0, 0.0, 0.0)).with_scale(Vec3::splat(0.5));
+    spawn_skeleton(commands.reborrow(), &mut meshes, &mut materials, 1, trans);
+    let trans = Transform::from_translation(Vec3::new(-50.0, 0.0, 0.0)).with_scale(Vec3::splat(0.5));
+    spawn_skeleton(commands.reborrow(), &mut meshes, &mut materials, 2, trans);
+    let trans = Transform::from_translation(Vec3::new(100.0, 0.0, 0.0)).with_scale(Vec3::splat(0.5));
+    spawn_skeleton(commands, &mut meshes, &mut materials, 3, trans);
+}
+
+fn spawn_skeleton(
+    mut commands: Commands,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
+    skeleton_id: i32,
+    hips_transform: Transform,
+) {
     let make_bone_axis = false;
     let material = StandardMaterial {
         base_color: Color::srgba_u8(166, 116, 51, 255),
-        //base_color: Color::rgba_u8(133, 0, 0, 255).into(),
         reflectance: 0.2,
         perceptual_roughness: 0.95,
         ..Default::default()
@@ -464,7 +476,6 @@ fn spawn_skeleton(
             Mesh3d(meshes.add(mesh)),
             MeshMaterial3d(material_handle.clone()),
             Transform::IDENTITY,
-            /*
             PickSelection { is_selected: false },
             OutlineVolume {
                 visible: false,
@@ -474,17 +485,28 @@ fn spawn_skeleton(
             OutlineStencil::default(),
             OutlineMode::default(),
             ComputedOutline::default(),
-            */
             Name::from(name),
-            Bone { id: bone_id },
+            Bone { id: bone_id, skeleton_id },
         ))
         .observe(bone_click)
         .id();
 
-    commands.entity(hips).add_child(hips);
+    let empty: Entity = commands
+        .spawn((
+            Skeleton { id: skeleton_id },
+            hips_transform,
+            Visibility::Visible,
+            InheritedVisibility::default(),
+            Name::from("bone axis"),
+        ))
+        .id();
+
+    commands.entity(empty).add_child(hips);
+
+    //commands.entity(hips).add_child(hips);
 
     if make_bone_axis {
-        let axis = spawn_entity_axis(&mut commands, &mut meshes, &mut materials, axis_visible);
+        let axis = spawn_entity_axis(&mut commands, meshes, materials, axis_visible);
         commands.entity(hips).add_child(axis);
     }
     bone_id += 1;
@@ -493,12 +515,13 @@ fn spawn_skeleton(
     bone = skeleton_parts.get(&name).unwrap();
     let mut prev_entity = spawn_bone(
         &mut commands,
-        &mut meshes,
+        meshes,
         material_handle.clone(),
-        &mut materials,
+        materials,
         bone,
         bone_id,
         hips,
+        skeleton_id,
     );
     bone_id += 1;
 
@@ -506,12 +529,13 @@ fn spawn_skeleton(
     let bone = skeleton_parts.get(&name).unwrap();
     prev_entity = spawn_bone(
         &mut commands,
-        &mut meshes,
+        meshes,
         material_handle.clone(),
-        &mut materials,
+        materials,
         bone,
         bone_id,
         prev_entity,
+        skeleton_id,
     );
     bone_id += 1;
 
@@ -519,12 +543,13 @@ fn spawn_skeleton(
     let bone = skeleton_parts.get(&name).unwrap();
     _ = spawn_bone(
         &mut commands,
-        &mut meshes,
+        meshes,
         material_handle.clone(),
-        &mut materials,
+        materials,
         bone,
         bone_id,
         prev_entity,
+        skeleton_id,
     );
     bone_id += 1;
 
@@ -532,12 +557,13 @@ fn spawn_skeleton(
     let bone = skeleton_parts.get(&name).unwrap();
     prev_entity = spawn_bone(
         &mut commands,
-        &mut meshes,
+        meshes,
         material_handle.clone(),
-        &mut materials,
+        materials,
         bone,
         bone_id,
         hips,
+        skeleton_id,
     );
     bone_id += 1;
 
@@ -545,12 +571,13 @@ fn spawn_skeleton(
     let bone = skeleton_parts.get(&name).unwrap();
     prev_entity = spawn_bone(
         &mut commands,
-        &mut meshes,
+        meshes,
         material_handle.clone(),
-        &mut materials,
+        materials,
         bone,
         bone_id,
         prev_entity,
+        skeleton_id,
     );
     bone_id += 1;
 
@@ -558,63 +585,67 @@ fn spawn_skeleton(
     let bone = skeleton_parts.get(&name).unwrap();
     _ = spawn_bone(
         &mut commands,
-        &mut meshes,
+        meshes,
         material_handle.clone(),
-        &mut materials,
+        materials,
         bone,
         bone_id,
         prev_entity,
+        skeleton_id,
     );
     bone_id += 1;
 
     let name = "Lumbar".to_string();
     let bone = skeleton_parts.get(&name).unwrap();
     prev_entity = hips;
-    let l_spine_length = 9.0;
+    let _l_spine_length = 9.0;
 
-    for i in (1..=5).rev() {
+    for _i in (1..=5).rev() {
         prev_entity = spawn_bone(
             &mut commands,
-            &mut meshes,
+            meshes,
             material_handle.clone(),
-            &mut materials,
+            materials,
             bone,
             bone_id,
             prev_entity,
+            skeleton_id,
         );
         bone_id += 1;
     }
 
     let name = "Thoracic".to_string();
     let bone = skeleton_parts.get(&name).unwrap();
-    let t_spine_length = 19.0;
-    for i in (1..=12).rev() {
+    let _t_spine_length = 19.0;
+    for _i in (1..=12).rev() {
         prev_entity = spawn_bone(
             &mut commands,
-            &mut meshes,
+            meshes,
             material_handle.clone(),
-            &mut materials,
+            materials,
             bone,
             bone_id,
             prev_entity,
+            skeleton_id,
         );
         bone_id += 1;
     }
 
     let name = "Cervical".to_string();
     let mut bone = skeleton_parts.get(&name).unwrap().clone();
-    let c_spine_length = 8.0;
+    let _c_spine_length = 8.0;
     let mut c7 = prev_entity;
     for i in (1..=7).rev() {
         bone.name = format!("{name} {i}");
         prev_entity = spawn_bone(
             &mut commands,
-            &mut meshes,
+            meshes,
             material_handle.clone(),
-            &mut materials,
+            materials,
             &bone,
             bone_id,
             prev_entity,
+            skeleton_id,
         );
         if i == 7 {
             c7 = prev_entity;
@@ -626,26 +657,27 @@ fn spawn_skeleton(
     let bone = skeleton_parts.get(&name).unwrap();
     _ = spawn_bone(
         &mut commands,
-        &mut meshes,
+        meshes,
         material_handle.clone(),
-        &mut materials,
+        materials,
         bone,
         bone_id,
         c7,
+        skeleton_id,
     );
     bone_id += 1;
 
-    info!("left clavical id {}", bone_id);
     let name = "Left Clavical".to_string();
     let bone = skeleton_parts.get(&name).unwrap();
     prev_entity = spawn_bone(
         &mut commands,
-        &mut meshes,
+        meshes,
         material_handle.clone(),
-        &mut materials,
+        materials,
         bone,
         bone_id,
         c7,
+        skeleton_id,
     );
     bone_id += 1;
 
@@ -653,12 +685,13 @@ fn spawn_skeleton(
     let bone = skeleton_parts.get(&name).unwrap();
     prev_entity = spawn_bone(
         &mut commands,
-        &mut meshes,
+        meshes,
         material_handle.clone(),
-        &mut materials,
+        materials,
         bone,
         bone_id,
         prev_entity,
+        skeleton_id,
     );
     bone_id += 1;
 
@@ -666,12 +699,13 @@ fn spawn_skeleton(
     let bone = skeleton_parts.get(&name).unwrap();
     prev_entity = spawn_bone(
         &mut commands,
-        &mut meshes,
+        meshes,
         material_handle.clone(),
-        &mut materials,
+        materials,
         bone,
         bone_id,
         prev_entity,
+        skeleton_id,
     );
     bone_id += 1;
 
@@ -679,28 +713,29 @@ fn spawn_skeleton(
     let bone = skeleton_parts.get(&name).unwrap();
     _ = spawn_bone(
         &mut commands,
-        &mut meshes,
+        meshes,
         material_handle.clone(),
-        &mut materials,
+        materials,
         bone,
         bone_id,
         prev_entity,
+        skeleton_id,
     );
     bone_id += 1;
 
     prev_entity = c7;
 
-    info!("right clavical id {}", bone_id);
     let name = "Right Clavical".to_string();
     let bone = skeleton_parts.get(&name).unwrap();
     prev_entity = spawn_bone(
         &mut commands,
-        &mut meshes,
+        meshes,
         material_handle.clone(),
-        &mut materials,
+        materials,
         bone,
         bone_id,
         prev_entity,
+        skeleton_id,
     );
     bone_id += 1;
 
@@ -708,12 +743,13 @@ fn spawn_skeleton(
     let bone = skeleton_parts.get(&name).unwrap();
     prev_entity = spawn_bone(
         &mut commands,
-        &mut meshes,
+        meshes,
         material_handle.clone(),
-        &mut materials,
+        materials,
         bone,
         bone_id,
         prev_entity,
+        skeleton_id,
     );
     bone_id += 1;
 
@@ -721,12 +757,13 @@ fn spawn_skeleton(
     let bone = skeleton_parts.get(&name).unwrap();
     prev_entity = spawn_bone(
         &mut commands,
-        &mut meshes,
+        meshes,
         material_handle.clone(),
-        &mut materials,
+        materials,
         bone,
         bone_id,
         prev_entity,
+        skeleton_id,
     );
     bone_id += 1;
 
@@ -734,12 +771,13 @@ fn spawn_skeleton(
     let bone = skeleton_parts.get(&name).unwrap();
     _ = spawn_bone(
         &mut commands,
-        &mut meshes,
+        meshes,
         material_handle.clone(),
-        &mut materials,
+        materials,
         bone,
         bone_id,
         prev_entity,
+        skeleton_id,
     );
 }
 
@@ -964,16 +1002,13 @@ fn spawn_main_axis(
     });
 }
 
-fn bone_click(
-    mut click: Trigger<Pointer<Released>>,
-    bones: Query<&Bone>,
-) {
+fn bone_click(mut click: Trigger<Pointer<Released>>, _bones: Query<&Bone>) {
     click.propagate(false);
     /*
-    if let Ok(bone) = bones.get(click.target) {
-        println!("{} bone click", bone.id);
-    } else {
-        println!("some other click");
-    }
-*/
+        if let Ok(bone) = bones.get(click.target) {
+            println!("{} bone click", bone.id);
+        } else {
+            println!("some other click");
+        }
+    */
 }
