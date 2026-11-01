@@ -1,8 +1,8 @@
 use bevy::{
-    picking::pointer::{PointerInteraction, PointerPress},
+    picking::{PickingSettings, pointer::{PointerInteraction, PointerPress}},
     prelude::*,
 };
-use bevy_mod_outline::*;
+//use bevy_mod_outline::*;
 use transform_gizmo_bevy::GizmoTarget;
 
 #[derive(Component, Clone, Copy)]
@@ -39,23 +39,23 @@ pub fn update_picking(
         (
             Entity,
             &PickSelection,
-            &mut OutlineVolume,
+            //&mut OutlineVolume,
             Option<&GizmoTarget>,
         ),
         Changed<PickSelection>,
     >,
     mut commands: Commands,
 ) {
-    for (entity, pick_interaction, mut outline, gizmo_target) in &mut targets {
+    for (entity, pick_interaction, /*mut outline, */gizmo_target) in &mut targets {
         let mut entity_cmd = commands.entity(entity);
         if pick_interaction.is_selected {
             if gizmo_target.is_none() {
                 entity_cmd.insert(GizmoTarget::default());
             }
-            outline.visible = true;
+            //outline.visible = true;
         } else {
             entity_cmd.remove::<GizmoTarget>();
-            outline.visible = false;
+            //outline.visible = false;
         }
     }
 }
@@ -83,6 +83,7 @@ pub fn manage_selection(
             }
         },
     };
+    /*
     if let Some((e, _)) = pointer.first() {
         let Ok(root) = pick_selection.get(*e).map(|n| n.is_selected) else {
             return;
@@ -100,4 +101,5 @@ pub fn manage_selection(
         pick.is_selected = root;
         pick.is_selected ^= true;
     }
+*/
 }

@@ -4,15 +4,11 @@ use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass};
 //use bevy_mod_outline::{ComputedOutline, OutlineMode, OutlineStencil, OutlineVolume};
 use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
-use yogamat_wasm::AsanaData;
 use std::collections::BTreeMap;
-/*
-use transform_gizmo_bevy::{
-    enum_set, GizmoCamera, GizmoMode, GizmoOptions, TransformGizmoPlugin,
-};
-*/
-//use yogamat_wasm::picking::{GizmoPickingPlugin, PickSelection};
+use transform_gizmo_bevy::{enum_set, GizmoCamera, GizmoMode, GizmoOptions, TransformGizmoPlugin};
+use yogamat_wasm::picking::{GizmoPickingPlugin, PickSelection};
 use yogamat_wasm::skeleton::{self, make_bone_mesh, BoneCube, JointMatrix};
+use yogamat_wasm::AsanaData;
 
 #[derive(Component)]
 struct MainMenu;
@@ -112,8 +108,8 @@ fn main() {
             ..default()
         }))
         .add_plugins(EguiPlugin::default())
-        //.add_plugins(TransformGizmoPlugin)
-        //.add_plugins(GizmoPickingPlugin)
+        .add_plugins(TransformGizmoPlugin)
+        .add_plugins(GizmoPickingPlugin)
         .add_plugins(PanOrbitCameraPlugin)
         .add_systems(
             Startup,
@@ -124,13 +120,13 @@ fn main() {
                 setup_ui,
                 spawn_mat,
                 //export_scene,
-            ).chain(),
+            )
+                .chain(),
         )
         .add_systems(PreStartup, load_resources)
         .add_systems(PostStartup, initial_pose)
         .add_systems(Update, (keyboard_input_system, button_clicked))
         .add_systems(EguiPrimaryContextPass, pose_egui)
-        /*
         .insert_resource(GizmoOptions {
             gizmo_modes: enum_set!(
                 GizmoMode::TranslateX
@@ -142,7 +138,6 @@ fn main() {
             ),
             ..default()
         })
-            */
         .register_type::<MeshMaterial3d<StandardMaterial>>()
         //.register_type_data::<MeshMaterial3d<StandardMaterial>, ReflectSerialize>()
         .run();
@@ -233,7 +228,10 @@ fn set_pose(
             *transform = Transform::from_matrix(pose_mat.mat);
         }
         if bone.skeleton_id == 3 {
-            let pose_mat = matsyendrasana.iter().find(|j| j.joint_id == bone.id).unwrap();
+            let pose_mat = matsyendrasana
+                .iter()
+                .find(|j| j.joint_id == bone.id)
+                .unwrap();
             *transform = Transform::from_matrix(pose_mat.mat);
         }
     }
@@ -321,11 +319,11 @@ fn spawn_camera(mut commands: Commands) {
         PanOrbitCamera {
             focus,
             radius: Some((transform.translation - focus).length()),
-            button_orbit: MouseButton::Left,
-            //modifier_orbit: Some(KeyCode::ControlLeft),
+            button_orbit: MouseButton::Right,
+            modifier_pan: Some(KeyCode::ShiftLeft),
             ..Default::default()
         },
-        //GizmoCamera,
+        GizmoCamera,
     ));
 
     commands.insert_resource(OriginalCameraTransform(transform));
@@ -398,26 +396,34 @@ fn spawn_bone(
     skeleton_id: i32,
 ) -> Entity {
     let pickable = false;
-    let make_bone_axis = false;
+    let make_bone_axis = true;
     let new_bone = if pickable {
         commands
             .spawn((
                 Mesh3d(meshes.add(make_bone_mesh(bone_cube))),
-                Transform::IDENTITY,
                 MeshMaterial3d(material),
-                /*
-PickSelection { is_selected: false },
-                OutlineVolume {
-                    visible: false,
-                    colour: Color::WHITE,
-                    width: 2.0,
+                bone_cube.transform,
+                //Transform::IDENTITY,
+                Pickable {
+                    should_block_lower: false,
+                    is_hoverable: true,
                 },
-                OutlineStencil::default(),
-                OutlineMode::default(),
-                ComputedOutline::default(),
-*/
+                PickSelection { is_selected: false },
+                /*
+                                OutlineVolume {
+                                    visible: false,
+                                    colour: Color::WHITE,
+                                    width: 2.0,
+                                },
+                                OutlineStencil::default(),
+                                OutlineMode::default(),
+                                ComputedOutline::default(),
+                */
                 Name::from(bone_cube.name.clone()),
-                Bone { id: bone_id, skeleton_id },
+                Bone {
+                    id: bone_id,
+                    skeleton_id,
+                },
             ))
             .observe(bone_click)
             .id()
@@ -428,7 +434,10 @@ PickSelection { is_selected: false },
                 Transform::IDENTITY,
                 MeshMaterial3d(material),
                 Name::from(bone_cube.name.clone()),
-                Bone { id: bone_id, skeleton_id },
+                Bone {
+                    id: bone_id,
+                    skeleton_id,
+                },
             ))
             .id()
     };
@@ -445,12 +454,20 @@ fn spawn_main_skeleton(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    spawn_skeleton(commands.reborrow(), &mut meshes, &mut materials, 0, Transform::IDENTITY);
+    spawn_skeleton(
+        commands.reborrow(),
+        &mut meshes,
+        &mut materials,
+        0,
+        Transform::IDENTITY,
+    );
     let trans = Transform::from_translation(Vec3::new(50.0, 0.0, 0.0)).with_scale(Vec3::splat(0.5));
     spawn_skeleton(commands.reborrow(), &mut meshes, &mut materials, 1, trans);
-    let trans = Transform::from_translation(Vec3::new(-50.0, 0.0, 0.0)).with_scale(Vec3::splat(0.5));
+    let trans =
+        Transform::from_translation(Vec3::new(-50.0, 0.0, 0.0)).with_scale(Vec3::splat(0.5));
     spawn_skeleton(commands.reborrow(), &mut meshes, &mut materials, 2, trans);
-    let trans = Transform::from_translation(Vec3::new(100.0, 0.0, 0.0)).with_scale(Vec3::splat(0.5));
+    let trans =
+        Transform::from_translation(Vec3::new(100.0, 0.0, 0.0)).with_scale(Vec3::splat(0.5));
     spawn_skeleton(commands, &mut meshes, &mut materials, 3, trans);
 }
 
@@ -461,7 +478,7 @@ fn spawn_skeleton(
     skeleton_id: i32,
     hips_transform: Transform,
 ) {
-    let make_bone_axis = false;
+    let make_bone_axis = true;
     let material = StandardMaterial {
         base_color: Color::srgba_u8(166, 116, 51, 255),
         reflectance: 0.2,
@@ -481,20 +498,28 @@ fn spawn_skeleton(
         .spawn((
             Mesh3d(meshes.add(mesh)),
             MeshMaterial3d(material_handle.clone()),
-            Transform::IDENTITY,
-            /*
-            PickSelection { is_selected: false },
-            OutlineVolume {
-                visible: false,
-                colour: Color::WHITE,
-                width: 2.0,
+            bone.transform,
+            //Transform::IDENTITY,
+            Pickable {
+                should_block_lower: false,
+                is_hoverable: true,
             },
-            OutlineStencil::default(),
-            OutlineMode::default(),
-            ComputedOutline::default(),
-*/
+            PickSelection { is_selected: false },
+            /*
+                        OutlineVolume {
+                            visible: false,
+                            colour: Color::WHITE,
+                            width: 2.0,
+                        },
+                        OutlineStencil::default(),
+                        OutlineMode::default(),
+                        ComputedOutline::default(),
+            */
             Name::from(name),
-            Bone { id: bone_id, skeleton_id },
+            Bone {
+                id: bone_id,
+                skeleton_id,
+            },
         ))
         .observe(bone_click)
         .id();
@@ -510,8 +535,6 @@ fn spawn_skeleton(
         .id();
 
     commands.entity(empty).add_child(hips);
-
-    //commands.entity(hips).add_child(hips);
 
     if make_bone_axis {
         let axis = spawn_entity_axis(&mut commands, meshes, materials, axis_visible);
@@ -1010,13 +1033,14 @@ fn spawn_main_axis(
     });
 }
 
-fn bone_click(mut click: On<Pointer<Release>>, _bones: Query<&Bone>) {
+fn bone_click(
+    mut click: On<Pointer<Release>>,
+    bones: Query<(Entity, &Bone, &mut PickSelection, &Name)>,
+) {
     click.propagate(false);
-    /*
-        if let Ok(bone) = bones.get(click.target) {
-            println!("{} bone click", bone.id);
-        } else {
-            println!("some other click");
-        }
-    */
+    let len = bones.iter().len();
+    info!("click bone query len {}", len);
+    for (entity, _bone, mut pick, _name) in bones {
+        pick.is_selected = entity == click.entity;
+    }
 }

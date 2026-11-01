@@ -32,7 +32,7 @@ After running the above wasm-bindgen command:
 Either you have to disable the right click context menu in the browser to use the default key bindings or change the bindings in camera.rs.
 To disable right click this needs to be put in yogamat.js at the beginning of the init function.
 ```javascript
-// async function init(input) {
+async function init(input) {
     document.addEventListener("contextmenu", function (e){
         e.preventDefault();
     }, false);
